@@ -1,5 +1,11 @@
 /* eslint-disable  */
-import { useContext, useState, type ComponentType } from "react";
+import {
+  createElement,
+  forwardRef,
+  useContext,
+  useState,
+  type ComponentType,
+} from "react";
 import { Appearance } from "react-native";
 
 import type { StyleDescriptor } from "react-native-css/compiler";
@@ -21,6 +27,132 @@ import {
   type Getter,
 } from "./reactivity";
 import { resolveValue } from "./styles/resolve";
+
+/**
+ * Detects component type based on component name and other heuristics
+ */
+function detectComponentType(component: ReactComponent): string {
+  const name = (component.displayName || component.name || "").toLowerCase();
+
+  // SVG indicators
+  if (
+    name.includes("svg") ||
+    name.includes("icon") ||
+    name.includes("logo") ||
+    name.endsWith(".svg") ||
+    // Common SVG component names
+    ["path", "circle", "rect", "line", "polygon", "g"].includes(name)
+  ) {
+    return "svg";
+  }
+
+  // Image indicators
+  if (
+    name.includes("image") ||
+    name.includes("img") ||
+    name.includes("picture") ||
+    name.includes("photo")
+  ) {
+    return "image";
+  }
+
+  // Text indicators
+  if (
+    name.includes("text") ||
+    name.includes("label") ||
+    name.includes("title") ||
+    name.includes("heading")
+  ) {
+    return "text";
+  }
+
+  // View indicators
+  if (
+    name.includes("view") ||
+    name.includes("container") ||
+    name.includes("wrapper") ||
+    name.includes("box")
+  ) {
+    return "view";
+  }
+
+  return "unknown";
+}
+
+/**
+ * Gets intelligent default nativeStyleMapping based on component type
+ */
+function getIntelligentDefaults(componentType: string): Record<string, string> {
+  switch (componentType) {
+    case "svg":
+      return {
+        height: "height",
+        width: "width",
+        size: "size",
+        fill: "fill",
+        stroke: "stroke",
+        strokeWidth: "strokeWidth",
+        strokeDasharray: "strokeDasharray",
+        strokeLinecap: "strokeLinecap",
+        strokeLinejoin: "strokeLinejoin",
+        opacity: "opacity",
+        x: "x",
+        y: "y",
+      };
+    case "text":
+      return {
+        color: "color",
+      };
+    case "image":
+    case "view":
+    default:
+      return {};
+  }
+}
+
+/**
+ * Merges user-provided mapping with intelligent defaults
+ */
+function mergeWithIntelligentDefaults<C extends ReactComponent<any>>(
+  userMapping: StyledConfiguration<C>,
+  component: C,
+): StyledConfiguration<C> {
+  // If user provided explicit mapping with nativeStyleMapping or nativeStyleToProp, don't override
+  if (
+    typeof userMapping === "object" &&
+    userMapping.className &&
+    typeof userMapping.className === "object" &&
+    ((userMapping.className as any).nativeStyleMapping ||
+      (userMapping.className as any).nativeStyleToProp)
+  ) {
+    return userMapping;
+  }
+
+  // If user provided any explicit object configuration for className, don't override
+  if (
+    typeof userMapping === "object" &&
+    userMapping.className &&
+    typeof userMapping.className === "object"
+  ) {
+    return userMapping;
+  }
+
+  const componentType = detectComponentType(component);
+  const intelligentDefaults = getIntelligentDefaults(componentType);
+
+  // If no intelligent defaults for this component type, use user mapping as-is
+  if (Object.keys(intelligentDefaults).length === 0) {
+    return userMapping;
+  }
+
+  // Apply intelligent defaults only for simple string configurations
+  return {
+    className: {
+      target: "style",
+      nativeStyleMapping: intelligentDefaults,
+    },
+  } as any as StyledConfiguration<C>;
+}
 
 export {
   StyleCollection,
@@ -48,22 +180,30 @@ export const styled = <
   mapping: M = defaultMapping as M,
   options?: StyledOptions,
 ) => {
-  let component: any;
-  // const type = getComponentType(baseComponent);
-
-  const configs = mappingToConfig(mapping);
-
-  if (options?.passThrough) {
-    component = (props: Record<string, any>) => {
-      return usePassthrough(baseComponent, props, configs);
-    };
-  } else {
-    component = (props: Record<string, any>) => {
-      return useNativeCss(baseComponent, props, configs);
-    };
-  }
+  // Apply intelligent defaults based on component type
+  const enhancedMapping = mergeWithIntelligentDefaults(mapping, baseComponent);
+  const configs = mappingToConfig(enhancedMapping);
 
   const name = baseComponent.displayName ?? baseComponent.name ?? "unknown";
+
+  // Create a properly ref-forwarded component
+  const RefForwardedBase = forwardRef<any, any>((props, ref) => {
+    return createElement(baseComponent, { ref, ...props });
+  });
+  RefForwardedBase.displayName = `RefForwarded${name}`;
+
+  let component: any;
+
+  if (options?.passThrough) {
+    component = forwardRef<any, any>((props, ref) => {
+      return usePassthrough(RefForwardedBase, { ref, ...props }, configs);
+    });
+  } else {
+    component = forwardRef<any, any>((props, ref) => {
+      return useNativeCss(RefForwardedBase, { ref, ...props }, configs);
+    });
+  }
+
   component.displayName = `CssInterop.${name}`;
   return component;
 };

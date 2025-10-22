@@ -181,9 +181,9 @@ export function mappingToConfig(mapping: StyledConfiguration<any>) {
     } else if (typeof value === "string") {
       return { source: key, target: value.split(".") };
     } else if (typeof value === "object") {
-      const nativeStyleMapping = value.nativeStyleMapping as
-        | Record<string, string>
-        | undefined;
+      // Handle both new and deprecated property names
+      const nativeStyleMapping = (value.nativeStyleMapping ||
+        (value as any).nativeStyleToProp) as Record<string, string> | undefined;
 
       if (Array.isArray(value)) {
         return { source: key, target: value, nativeStyleMapping };
