@@ -142,17 +142,28 @@ function deepMergeConfig(
       // Special handling for style target when we have inline styles
       result = { ...left, ...right };
       if (left?.style && right?.style && rightIsInline) {
-        // Only create style arrays when we have different properties that should coexist
-        const leftKeys = new Set(Object.keys(left.style));
-        const rightKeys = new Set(Object.keys(right.style));
-        const hasNonOverlappingProperties = [...leftKeys].some(key => !rightKeys.has(key));
-
-        if (hasNonOverlappingProperties) {
-          // Different properties exist - create array for React Native to merge both
-          result.style = [left.style, right.style];
+        // Performance-optimized property overlap check
+        // Only create style arrays when properties dont completely overlap
+        let hasNonOverlapping = false;
+        
+        // Type-safe iteration over style properties
+        const leftStyle = left.style as Record<string, any>;
+        const rightStyle = right.style as Record<string, any>;
+        
+        // Early exit optimization: check left properties against right
+        for (const key in leftStyle) {
+          if (Object.prototype.hasOwnProperty.call(leftStyle, key)) {
+            if (!(key in rightStyle)) {
+              hasNonOverlapping = true;
+              break; // Early exit - found non-overlapping property
+            }
+          }
         }
-        // If all properties overlap, right.style will override via Object.assign above
-      }
+        
+        if (hasNonOverlapping) {
+          // Different properties exist - create array for React Native to merge both
+          result.style = [leftStyle, rightStyle];
+        }      }
     } else {
       result = Object.assign({}, left, right);
     }
