@@ -1,6 +1,32 @@
 # JSX Transform Global Styling
 
-This feature enables automatic global styling for native components (like SVG, Expo Image, etc.) by configuring your TypeScript/Babel setup to use react-native-css's custom JSX runtime.
+This feature enables automatic global styling for native components (like SVG, Expo Image, etc.) by configuring your TypeScript setup to use react-native-css's custom JSX runtime.
+
+## Quick Setup (Expo Users)
+
+**For most Expo projects, you only need:**
+
+1. Add to your `tsconfig.json`:
+   ```json
+   {
+     "compilerOptions": {
+       "jsx": "react-jsx",
+       "jsxImportSource": "react-native-css"
+     }
+   }
+   ```
+
+2. Register components once in your app:
+   ```javascript
+   styled(Circle, { className: { target: 'style', nativeStyleMapping: { fill: 'fill' } }});
+   ```
+
+3. Use anywhere automatically:
+   ```jsx
+   <Circle className="fill-red-500" />  // ✅ Just works!
+   ```
+
+**No `babel.config.js` changes needed for most Expo projects!**
 
 ## The Problem
 
@@ -44,7 +70,7 @@ styled(Circle, {
 
 ## Setup
 
-### Step 1: Configure TypeScript
+### Step 1: Configure TypeScript (Expo/React Native)
 
 Add this to your `tsconfig.json`:
 
@@ -57,23 +83,36 @@ Add this to your `tsconfig.json`:
 }
 ```
 
-### Step 2: Configure Babel (if using)
+**For most Expo projects, this is all you need!** Expo uses TypeScript to process `.tsx` files, so the TypeScript configuration handles the JSX transform.
 
-Add this to your `babel.config.js`:
+### Step 2: Configure Babel (Only if needed)
+
+**You likely don't need this for Expo projects.** Only add this if you:
+- Use `.jsx` files (instead of `.tsx`)
+- Have a custom setup where Babel processes JSX instead of TypeScript
+
+If needed, modify your existing `babel.config.js`:
 
 ```javascript
-module.exports = {
-  presets: [
-    [
-      '@babel/preset-react',
-      {
-        runtime: 'automatic',
-        importSource: 'react-native-css'
-      }
-    ]
-  ]
+module.exports = function (api) {
+  api.cache(false);
+  return {
+    presets: [
+      'babel-preset-expo',
+      [
+        '@babel/preset-react',
+        {
+          runtime: 'automatic',
+          importSource: 'react-native-css'
+        }
+      ]
+    ],
+    plugins: ['react-native-worklets/plugin'],
+  };
 };
 ```
+
+**Note:** Most Expo users should stick with just the TypeScript configuration above.
 
 ### Step 3: Register Components
 
@@ -146,13 +185,14 @@ Our custom `jsx` function checks if the component is registered with `styled()` 
 
 ### ✅ Compatible with:
 - React Native 0.64+
-- Expo SDK 45+
+- Expo SDK 45+ (TypeScript configuration only)
 - TypeScript 4.1+
 - React 17+ (automatic JSX transform)
 - All existing react-native-css features
 
 ### ⚠️ Considerations:
-- Requires project configuration changes
+- Requires TypeScript configuration (`tsconfig.json`)
+- For Expo: Usually no Babel changes needed
 - Affects all JSX in your project (not just styled components)
 - Small performance overhead for JSX creation (usually negligible)
 
@@ -183,8 +223,9 @@ const StyledCircle = getGlobalStyled(Circle);
 ### JSX Transform Not Working
 
 1. **Check TypeScript config**: Ensure `jsx: "react-jsx"` and `jsxImportSource: "react-native-css"`
-2. **Clear cache**: Try clearing Metro/Babel cache
-3. **Check imports**: Make sure you're importing from the right packages
+2. **Expo users**: You likely only need the TypeScript config, not Babel changes
+3. **Clear cache**: Try clearing Metro cache with `npx expo start --clear`
+4. **Check file extensions**: Make sure you're using `.tsx` files (not `.jsx`)
 
 ### Components Not Styling
 
