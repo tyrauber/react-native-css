@@ -107,6 +107,7 @@ type NativeStyleMapping<T, S> = T extends object
 
 export interface StyledOptions {
   passThrough?: boolean;
+  global?: boolean;
 }
 
 /***************************     React Helpers      ***************************/

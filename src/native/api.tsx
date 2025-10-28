@@ -5,6 +5,7 @@ import { Appearance } from "react-native";
 import type { StyleDescriptor } from "react-native-css/compiler";
 import { VariableContext } from "react-native-css/native-internal";
 
+import { registerStyledComponent } from "../jsx-runtime";
 import type {
   ColorScheme,
   Props,
@@ -65,6 +66,12 @@ export const styled = <
 
   const name = baseComponent.displayName ?? baseComponent.name ?? "unknown";
   component.displayName = `CssInterop.${name}`;
+
+  // Register component in global JSX registry by default (can be disabled with global: false)
+  if (options?.global !== false) {
+    registerStyledComponent(baseComponent, component);
+  }
+
   return component;
 };
 
