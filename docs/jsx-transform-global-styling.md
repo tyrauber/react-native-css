@@ -1,10 +1,10 @@
 # JSX Transform Global Styling
 
-This feature enables automatic global styling for native components (like SVG, Expo Image, etc.) by configuring your TypeScript setup to use react-native-css's custom JSX runtime.
+This feature enables automatic global styling for native components (like SVG, Expo Image, etc.) by configuring TypeScript to use react-native-css's custom JSX runtime.
 
-## Quick Setup (Expo Users)
+## Quick Setup (Expo/.tsx projects)
 
-**For most Expo projects, you only need:**
+**For Expo projects using `.tsx` files (which is the standard), you only need:**
 
 1. Add to your `tsconfig.json`:
    ```json
@@ -26,7 +26,7 @@ This feature enables automatic global styling for native components (like SVG, E
    <Circle className="fill-red-500" />  // ✅ Just works!
    ```
 
-**No `babel.config.js` changes needed for most Expo projects!**
+**That's it! No other configuration needed for `.tsx` files.**
 
 ## The Problem
 
@@ -68,9 +68,9 @@ styled(Circle, {
 <Circle className="w-8 h-8 fill-red-500" />
 ```
 
-## Setup
+## Detailed Setup
 
-### Step 1: Configure TypeScript (Expo/React Native)
+### Step 1: Configure TypeScript
 
 Add this to your `tsconfig.json`:
 
@@ -83,38 +83,9 @@ Add this to your `tsconfig.json`:
 }
 ```
 
-**For most Expo projects, this is all you need!** Expo uses TypeScript to process `.tsx` files, so the TypeScript configuration handles the JSX transform.
+This tells TypeScript to use our custom JSX runtime for all `.tsx` files.
 
-### Step 2: Configure Babel (Only if needed)
-
-**You likely don't need this for Expo projects.** Only add this if you:
-- Use `.jsx` files (instead of `.tsx`)
-- Have a custom setup where Babel processes JSX instead of TypeScript
-
-If needed, modify your existing `babel.config.js`:
-
-```javascript
-module.exports = function (api) {
-  api.cache(false);
-  return {
-    presets: [
-      'babel-preset-expo',
-      [
-        '@babel/preset-react',
-        {
-          runtime: 'automatic',
-          importSource: 'react-native-css'
-        }
-      ]
-    ],
-    plugins: ['react-native-worklets/plugin'],
-  };
-};
-```
-
-**Note:** Most Expo users should stick with just the TypeScript configuration above.
-
-### Step 3: Register Components
+### Step 2: Register Components
 
 Register your native components once in your app:
 
@@ -185,16 +156,41 @@ Our custom `jsx` function checks if the component is registered with `styled()` 
 
 ### ✅ Compatible with:
 - React Native 0.64+
-- Expo SDK 45+ (TypeScript configuration only)
+- Expo SDK 45+
 - TypeScript 4.1+
 - React 17+ (automatic JSX transform)
 - All existing react-native-css features
 
 ### ⚠️ Considerations:
 - Requires TypeScript configuration (`tsconfig.json`)
-- For Expo: Usually no Babel changes needed
+- Works with `.tsx` files (standard for Expo)
 - Affects all JSX in your project (not just styled components)
 - Small performance overhead for JSX creation (usually negligible)
+
+## For .jsx files (Advanced)
+
+If you need to use `.jsx` files instead of `.tsx`, you'll need to modify your `babel.config.js`:
+
+```javascript
+module.exports = function (api) {
+  api.cache(false);
+  return {
+    presets: [
+      'babel-preset-expo',
+      [
+        '@babel/preset-react',
+        {
+          runtime: 'automatic',
+          importSource: 'react-native-css'
+        }
+      ]
+    ],
+    plugins: ['react-native-worklets/plugin'],
+  };
+};
+```
+
+**Note:** Most users should use `.tsx` files with TypeScript configuration instead.
 
 ## Alternative Approaches
 
@@ -223,9 +219,9 @@ const StyledCircle = getGlobalStyled(Circle);
 ### JSX Transform Not Working
 
 1. **Check TypeScript config**: Ensure `jsx: "react-jsx"` and `jsxImportSource: "react-native-css"`
-2. **Expo users**: You likely only need the TypeScript config, not Babel changes
+2. **Check file extensions**: Make sure you're using `.tsx` files
 3. **Clear cache**: Try clearing Metro cache with `npx expo start --clear`
-4. **Check file extensions**: Make sure you're using `.tsx` files (not `.jsx`)
+4. **Restart TypeScript**: In VS Code, run "TypeScript: Restart TS Server"
 
 ### Components Not Styling
 

@@ -1,6 +1,9 @@
 /* eslint-disable */
 import React from "react";
 
+// Import the flag for pre-styled components
+import { __REACT_NATIVE_CSS_STYLED__ } from "./components/copyComponentProperties";
+
 // Global registry for styled components
 const globalStyledRegistryContainer = {
   registry: new WeakMap<any, any>(),
@@ -56,6 +59,11 @@ function jsxWithGlobalStyling(
     typeof type === "function" ||
     (type && typeof type === "object" && (type as any).$$typeof)
   ) {
+    // Skip transformation if component is already pre-styled (from react-native-css/components)
+    if ((type as any)[__REACT_NATIVE_CSS_STYLED__]) {
+      return React.createElement(type as any, { ...props, key } as any);
+    }
+
     const styledVersion = globalStyledRegistryContainer.registry.get(type);
 
     // If we have a styled version and the props include className, use the styled version

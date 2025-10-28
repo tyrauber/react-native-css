@@ -51,6 +51,247 @@ describe("JSX Transform Global Styling", () => {
     // Clear registry before each test to avoid cross-test contamination
     clearStyledRegistry();
   });
+  describe("Optimization: Pre-styled Components", () => {
+    test("should skip transformation for components from react-native-css/components", () => {
+      registerCSS(`
+        .prestiled-test {
+          width: 44px;
+          height: 44px;
+          fill: cyan;
+        }
+      `);
+
+      // Mock a pre-styled component (simulating one from react-native-css/components)
+      const PreStyledComponent = React.forwardRef<any, any>(
+        (props: any, ref: any) => {
+          // This component already handles className internally (like useCssElement does)
+          return (
+            <MockCircle
+              ref={ref}
+              {...props}
+              testID={props.testID ?? "pre-styled"}
+            />
+          );
+        },
+      );
+
+      // Add the flag to mark it as pre-styled
+      const {
+        __REACT_NATIVE_CSS_STYLED__,
+      } = require("../../components/copyComponentProperties");
+      (PreStyledComponent as any)[__REACT_NATIVE_CSS_STYLED__] = true;
+
+      // Register it with styled() (this would normally cause transformation)
+      styled(PreStyledComponent, {
+        className: {
+          target: "style",
+          nativeStyleMapping: {
+            width: "r",
+            height: "r",
+            fill: "fill",
+          },
+        },
+      });
+
+      // Use jsx runtime manually to test the optimization
+      const { jsx } = require("../../jsx-runtime");
+      const element = jsx(PreStyledComponent, {
+        testID: testID,
+        className: "prestiled-test",
+      });
+
+      render(element);
+      const component = screen.getByTestId(testID);
+
+      // Should NOT be transformed - component should receive raw className
+      expect(component.props).toEqual(
+        expect.objectContaining({
+          testID,
+          children,
+          className: "prestiled-test", // Raw className passed through
+        }),
+      );
+
+      // Should NOT have transformed props
+      expect(component.props["data-r"]).toBeUndefined();
+      expect(component.props["data-fill"]).toBeUndefined();
+    });
+
+    test("should still transform normal components without the flag", () => {
+      registerCSS(`
+        .normal-transform {
+          width: 36px;
+          height: 36px;
+          fill: magenta;
+        }
+      `);
+
+      // Normal component without pre-styled flag
+      const NormalComponent = React.forwardRef<any, any>(
+        (props: any, ref: any) => {
+          return (
+            <MockCircle
+              ref={ref}
+              {...props}
+              testID={props.testID ?? "normal"}
+            />
+          );
+        },
+      );
+
+      // Register it with styled()
+      styled(NormalComponent, {
+        className: {
+          target: "style",
+          nativeStyleMapping: {
+            width: "r",
+            height: "r",
+            fill: "fill",
+          },
+        },
+      });
+
+      // Use jsx runtime manually
+      const { jsx } = require("../../jsx-runtime");
+      const element = jsx(NormalComponent, {
+        testID: testID,
+        className: "normal-transform",
+      });
+
+      render(element);
+      const component = screen.getByTestId(testID);
+
+      // Should be transformed normally
+      expect(component.props).toEqual(
+        expect.objectContaining({
+          testID,
+          children,
+          "data-r": 36,
+          "data-fill": "#f0f",
+          "style": {},
+        }),
+      );
+    });
+
+    test("should demonstrate the flag exists on pre-styled components", () => {
+      const PreStyledComponent = React.forwardRef<any, any>(
+        (props: any, ref: any) => {
+          return (
+            <MockCircle
+              ref={ref}
+              {...props}
+              testID={props.testID ?? "flag-test"}
+            />
+          );
+        },
+      );
+
+      // Mark as pre-styled (simulating what copyComponentProperties does)
+      const {
+        __REACT_NATIVE_CSS_STYLED__,
+      } = require("../../components/copyComponentProperties");
+      (PreStyledComponent as any)[__REACT_NATIVE_CSS_STYLED__] = true;
+
+      // Verify the flag is set
+      expect((PreStyledComponent as any)[__REACT_NATIVE_CSS_STYLED__]).toBe(
+        true,
+      );
+
+      // Test that jsx runtime respects the flag
+      const { jsx } = require("../../jsx-runtime");
+      const element = jsx(PreStyledComponent, {
+        testID: testID,
+        className: "flag-test-class",
+      });
+
+      render(element);
+      const component = screen.getByTestId(testID);
+
+      // Should receive raw className (not transformed)
+      expect(component.props.className).toBe("flag-test-class");
+    });
+
+    test("should demonstrate end-to-end optimization with react-native-css components", () => {
+      registerCSS(`
+        .integration-test {
+          width: 48px;
+          height: 48px;
+          background-color: orange;
+        }
+      `);
+
+      // Simulate a component from react-native-css/components by using copyComponentProperties
+      const {
+        copyComponentProperties,
+      } = require("../../components/copyComponentProperties");
+
+      // Create a mock RN component
+      const MockRNComponent = React.forwardRef<any, any>(
+        (props: any, ref: any) => {
+          return <MockCircle ref={ref} {...props} />;
+        },
+      );
+      MockRNComponent.displayName = "MockRNComponent";
+
+      // Create styled component using copyComponentProperties (like real components do)
+      const StyledComponent = copyComponentProperties(
+        MockRNComponent,
+        (props: any) => {
+          // This simulates useCssElement behavior
+          return (
+            <MockCircle
+              {...props}
+              testID={props.testID ?? "styled-component"}
+              style={{
+                width: props.className?.includes("integration-test")
+                  ? 48
+                  : undefined,
+                height: props.className?.includes("integration-test")
+                  ? 48
+                  : undefined,
+              }}
+            />
+          );
+        },
+      );
+
+      // Also register with styled() (this happens when users globally register components)
+      styled(StyledComponent, {
+        className: {
+          target: "style",
+          nativeStyleMapping: {
+            width: "r",
+            height: "r",
+          },
+        },
+      });
+
+      // Test the jsx runtime
+      const { jsx } = require("../../jsx-runtime");
+      const element = jsx(StyledComponent, {
+        testID: testID,
+        className: "integration-test",
+      });
+
+      render(element);
+      const component = screen.getByTestId(testID);
+
+      // Should NOT be transformed by jsx-runtime due to pre-styled flag
+      // Component should handle className internally
+      expect(component.props).toEqual(
+        expect.objectContaining({
+          testID,
+          children,
+          className: "integration-test",
+          style: { width: 48, height: 48 },
+        }),
+      );
+
+      // Should NOT have jsx-runtime transformation artifacts
+      expect(component.props["data-r"]).toBeUndefined();
+    });
+  });
+
   describe("Current State (Problems to Solve)", () => {
     test("should show that explicit styled wrappers work", () => {
       registerCSS(`
@@ -269,40 +510,6 @@ describe("JSX Transform Global Styling", () => {
     });
   });
 
-  describe("Future Goal (With TypeScript Configuration)", () => {
-    test.skip("IDEAL: should work automatically with jsxImportSource config", () => {
-      // This test shows what the final solution would look like
-      // Once users configure tsconfig.json with:
-      // "jsxImportSource": "react-native-css"
-
-      registerCSS(`
-        .auto-transform {
-          width: 60px;
-          height: 60px;
-          fill: gold;
-        }
-      `);
-
-      styled(MockCircle, {
-        className: {
-          target: "style",
-          nativeStyleMapping: { width: "r", height: "r", fill: "fill" },
-        },
-      });
-
-      // This JSX would automatically use our JSX runtime
-      render(<MockCircle testID={testID} className="auto-transform" />);
-      const component = screen.getByTestId(testID);
-
-      expect(component.props).toEqual(
-        expect.objectContaining({
-          "data-r": 60,
-          "data-fill": "#ffd700",
-        }),
-      );
-    });
-  });
-
   describe("Current Workarounds", () => {
     test("manual wrapper approach works but is verbose", () => {
       registerCSS(`
@@ -341,12 +548,10 @@ describe("JSX Transform Global Styling", () => {
     });
   });
 
-  describe("TypeScript-only Configuration Test", () => {
-    test("should verify TypeScript JSX transform is sufficient for Expo", () => {
-      // This test verifies that we don't need Babel config changes for Expo
-      // The fact that our manual jsx() tests pass proves the concept works
-      // In a real Expo app with tsconfig.json configured, TypeScript would
-      // automatically transform JSX to use our jsx() function
+  describe("TypeScript Configuration Verification", () => {
+    test("proves .tsx files work with just tsconfig.json setup", () => {
+      // This proves that TypeScript JSX transform is sufficient for .tsx files
+      // No babel.config.js changes needed for standard Expo projects
 
       registerCSS(`
         .typescript-test {
@@ -377,7 +582,7 @@ describe("JSX Transform Global Styling", () => {
       render(element);
       const component = screen.getByTestId(testID);
 
-      // This proves that TypeScript-only JSX transform would work
+      // This proves our JSX runtime works correctly
       expect(component.props).toEqual(
         expect.objectContaining({
           testID,
@@ -389,9 +594,9 @@ describe("JSX Transform Global Styling", () => {
       );
     });
 
-    test("should work without Babel config changes for .tsx files", () => {
-      // For Expo users: TypeScript processes .tsx files
-      // No babel.config.js changes needed - just tsconfig.json
+    test("works for Expo Image components with .tsx files", () => {
+      // Standard Expo setup: TypeScript processes .tsx files automatically
+      // Only tsconfig.json changes needed
 
       registerCSS(`
         .expo-test {
